@@ -16,14 +16,17 @@ const createJWT = (payload) => {
 }
 
 const verifyToken = (token) => {
-    let decoded = null
+    if (!token) return null;
+    
     try {
-        decoded = jwt.verify(token, process.env.JWT_SECRET)
+        return jwt.verify(token, process.env.JWT_SECRET);
     } catch (error) {
-        decoded = 'TokenExpiredError'
-        console.log('TokenExpiredError')
+        if (error.name === 'TokenExpiredError') {
+            return 'TokenExpiredError';
+        }
+        console.log('JWT Error:', error);
+        return null;
     }
-    return decoded
 }
 
 const insertTokenToDB = async (email, token, typeAccount) => {
