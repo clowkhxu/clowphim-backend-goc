@@ -1,10 +1,134 @@
-const authService = require("../service/authService")
-const JWTService = require('../service/JWTService')
-const nodemailer = require("nodemailer");
-const handlebars = require('handlebars');
-const fs = require('fs');
+require('dotenv').config();
+const db = require('../models');
+const bcrypt = require('bcryptjs');
+const { getGroupWithRoles } = require('../service/JWTService');
+const { createJWT } = require('../service/JWTService');
+const { v4: uuidv4 } = require('uuid');
+const { Op } = require('sequelize');
+const sendEmail = require('../service/emailService');
+const ejs = require('ejs');
 const path = require('path');
 const { handleInsertTokeToCookies } = require("../utils");
+
+const hashPassword = (password) => {
+    const salt = bcrypt.genSaltSync(10);
+    return bcrypt.hashSync(password, salt);
+}
+
+const checkPassword = (inputPassword, hashedPassword) => {
+    return bcrypt.compareSync(inputPassword, hashedPassword);
+}
+
+const handleUserLogin = async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        if (!email || !password) {
+            return res.status(200).json({
+                EM: 'Missing required parameters',
+                EC: 1,
+                DT: ''
+            })
+        }
+
+        const user = await db.User.findOne({
+            where: { email },
+        })
+
+        if (!user) {
+            return res.status(200).json({
+                EM: 'Email không tồn tại',
+                EC: 1,
+                DT: ''
+            })
+        }
+
+        const isCorrectPassword = checkPassword(password, user.password)
+        if (!isCorrectPassword) {
+            return res.status(200).json({
+                EM: 'Mật khẩu không chính xác',
+                EC: 1,
+                DT: ''
+            })
+        }
+
+        // Trả về thông tin user không có token
+        return res.status(200).json({
+            EM: 'Đăng nhập thành công!',
+            EC: 0,
+            DT: {
+                id: user.id,
+                email: user.email,
+                username: user.username,
+                gender: user.gender,
+                phone_number: user.phone_number,
+                address: user.address,
+                type_account: user.type_account
+            }
+        })
+
+    } catch (error) {
+        console.log(error)
+        return res.status(500).json({
+            EM: 'Lỗi không xác định',
+            EC: -1,
+            DT: ''
+        })
+    }
+}
+
+const handleUserRegister = async (req, res) => {
+    try {
+        const { email, password, username } = req.body;
+        
+        // Validate input
+        if (!email || !password || !username) {
+            return res.status(200).json({
+                EM: 'Missing required parameters',
+                EC: 1,
+                DT: ''
+            })
+        }
+
+        // Check existing email
+        const existingUser = await db.User.findOne({
+            where: { email }
+        })
+
+        if (existingUser) {
+            return res.status(200).json({
+                EM: 'Email đã tồn tại',
+                EC: 1,
+                DT: ''
+            })
+        }
+
+        // Create new user
+        const hashedPassword = hashPassword(password);
+        const newUser = await db.User.create({
+            email,
+            username,
+            password: hashedPassword
+        })
+
+        return res.status(200).json({
+            EM: 'Đăng ký thành công!',
+            EC: 0,
+            DT: {
+                id: newUser.id,
+                email: newUser.email,
+                username: newUser.username
+            }
+        })
+
+    } catch (error) {
+        console.log(error)
+        return res.status(500).json({
+            EM: 'Lỗi không xác định',
+            EC: -1,
+            DT: ''
+        })
+    }
+}
 
 const sendOTP = async (req, res) => {
     try {
@@ -75,7 +199,6 @@ const sendOTP = async (req, res) => {
     }
 }
 
-
 const login = async (req, res) => {
     try {
 
@@ -101,7 +224,6 @@ const login = async (req, res) => {
         })
     }
 }
-
 
 const resgister = async (req, res) => {
     try {
@@ -235,9 +357,11 @@ const getUserById = async (req, res) => {
 }
 
 module.exports = {
+    handleUserLogin,
+    handleUserRegister,
+    sendOTP,
     login,
     resgister,
-    sendOTP,
     forgotPassword,
     updateUser,
     getUserAccount,
