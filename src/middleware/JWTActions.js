@@ -28,13 +28,11 @@ const verifyJWT = async (req, res, next) => {
     }
 
     if (accessToken && decoded !== 'TokenExpiredError') {
-
         req.user = {
             ...decoded,
             access_token: accessToken,
             refresh_token: refreshToken
         }
-
         next()
     } else {
         const response = await JWTService.findUserByToken(refreshToken)
@@ -66,11 +64,9 @@ const verifyJWT = async (req, res, next) => {
 
         // set cookies
         handleInsertTokeToCookies(res, accessToken, refreshToken)
-
-        return res.status(401).json({
-            EC: -1,
-            EM: 'Phiên đăng nhập đã hết hạn!'
-        })
+        
+        // Thay vì return error, gọi next() để tiếp tục request
+        next()
     }
 }
 
